@@ -1,0 +1,13 @@
+useDynLib(damda, .registration=TRUE)
+importFrom(Rcpp, evalCpp)
+# exportPattern("^[[:alpha:]]+")
+
+import("mclust", "foreach")
+
+importFrom("BMA", "bicreg")
+importFrom("utils", "setTxtProgressBar", "txtProgressBar", "flush.console")
+importFrom("stats", "cov", "df.residual", "lm.fit", "mahalanobis", "residuals")
+
+S3method("predict", "damda")
+
+export(damda, damda_varsel, control_em, control_reg, predict.damda)

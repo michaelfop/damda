@@ -1,0 +1,21 @@
+
+citHeader("To cite 'damda' R package in publications, please use:")
+
+citEntry(entry = "Article",
+         title        = "Unobserved classes and extra variables in high-dimensional discriminant analysis. ",
+         author       = personList(c(person(given="Michael", family="Fop"),
+                                   person(given="Pierre-Alexandre", family="Mattei"),
+                                   person(given="Charles", family="Bouveyron"),
+                                   person(given="Thomas Brendan", family="Murphy"))),
+         journal      = "Advances in Data Analysis and Classification",
+         year         = "2021",
+         volume       = "",
+         number       = "",
+         pages        = "",
+         doi          = "Accepted",
+         #
+         textVersion  =
+           paste("Fop, M., Mattei, P. A., Bouveyron, C., Murphy, T. B. (2021).",
+                 "Unobserved classes and extra variables in high-dimensional discriminant analysis.",
+                 "Advances in Data Analysis and Classification, accepted.")
+)

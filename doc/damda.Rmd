@@ -1,0 +1,206 @@
+---
+title: "damda -- Dimension-Adaptive Mixture Discriminant Analysis"
+author: "Michael Fop"
+date: "`r format(Sys.time(), '%d %b %Y')`"
+output: 
+  rmarkdown::html_vignette:
+        css: "my_theme.css"
+        toc: true
+vignette: >
+  %\VignetteIndexEntry{damda -- Dimension-Adaptive Mixture Discriminant Analysis}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+<link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css?family=Roboto+Slab" rel="stylesheet">
+
+```{r setup, include=FALSE}
+# setwd("~/Dropbox/Work/PhD_Work/MbC_VariableSelectionReview/stat_surveys/review/R_code")
+library(knitr)
+opts_chunk$set(fig.align="center",
+               fig.width=5, fig.height=4.5,
+               dev.args=list(pointsize=8))
+options("width" = 90)
+```
+
+
+## Introduction
+
+An [R](https://www.r-project.org/) package implementing *Dimension-Adaptive Mixture Discriminant Analysis* for supervised classification in settings where the test data might include unknown classes and/or being recorded on additional dimensions/variables. The package also implements a variable selection procedure for detecting the most informative variables for classification in high-dimensional situations.
+
+```{r}
+library(damda)
+```
+
+More information is available in the paper:
+
+Fop, M., Mattei, P. A., Bouveyron, C., Murphy, T. B. (2021). Unobserved classes and extra variables in high-dimensional discriminant analysis. *Advances in Data Analysis and Classification*, accepted. [ArXiv preprint](https://arxiv.org/abs/2102.01982).
+
+----
+
+## A classification problem with unobserved classes and extra variables
+
+This section includes an example concerning the benchmark Italian wine data available in package [MBCbook](https://cran.r-project.org/package=MBCbook). The training data consist of quantitative measurements on 9 chemical constituents, with class *Barolo* missing. The test data include all classes and record measurements on all 27 chemical constituents.
+
+```{r, message=FALSE}
+library(MBCbook)
+data(wine27)
+
+data <- scale(wine27[,1:27])
+class <- wine27$Type
+
+# set training and test set
+set.seed(987321)
+
+R <- ncol(data)
+obs <- sort( sample(1:R, R*1/3) )
+ext <- setdiff(1:R, obs)
+
+n <- nrow(data)
+n_test <- n/2    # test set larger than training set
+
+sel_test <- sample(1:n, n_test)
+data_test <- data[sel_test, ]
+class_test <- class[sel_test]
+
+rem <- which(class == "Barolo")
+data_train <- data[-union(rem, sel_test), obs]
+class_train <- factor( class[-union(rem, sel_test)] )
+```
+
+
+A standard linear discriminant analysis model is used as classifier, using the [mclust](https://cran.r-project.org/package=mclust) package. The classifier is not flexible enough to use the information in the extra variables available in the test set, nor to detect the additional class.
+```{r, message=FALSE}
+library(mclust)
+mc <- MclustDA(data_train, class_train, modelType = "EDDA", modelNames = "VVI")
+
+# predict using only variables available in training set
+mc_class <- predict.MclustDA(mc, data_test[,obs])$class  
+table(class_test, mc_class)
+```
+
+We use this classifier as baseline classifier in the learning phase of D-AMDA.
+```{r, message=FALSE}
+# learning phase
+
+P <- ncol(data_train)
+K <- nlevels(class_train) 
+
+learn <- list(pro = mc$prop)
+tmp <- lapply(mc$models, "[[", "parameters")
+learn$mu <- sapply(tmp, "[[", "mean")
+names <- colnames(data_train)
+rownames(learn$mu) <- colnames(data_train)
+learn$sigma <- array( unlist( lapply(tmp, function(x) x$variance$sigma) ), c(P,P, K),
+                      dimnames = list(names, names) )
+learn$K <- length(learn$pro)
+```
+
+Fit D-AMDA with default regularization, since the number of observations in the test set is small.
+```{r}
+fit <- damda(learn, data_test, H = 0:2, regularize = TRUE, verbose = FALSE)
+fit$BIC
+fit$H
+
+table(class_test, fit$classification)   # nice!
+```
+
+
+## Variable selection for supervised classification with unobserved classes and extra variables
+
+This section concerns a difficult situation where, in addition tot the test data including one extra class and additional variables, most of the variables are noisy and not useful for classification. Ideally, the noisy variables should be discarded. 
+
+Package [clusterGeneration](https://cran.r-project.org/package=clusterGeneration) is employed to generate a simulated dataset with 3 classes and observations recorded on 4 informative variables and 12 noisy variables.
+
+```{r,message=FALSE}
+require(clusterGeneration)
+
+C <- 3
+K <- C - 1
+
+set.seed(123098)
+gen_rand_clust <- genRandomClust(
+  numClust = C,
+  sepVal = 0.1,
+  rangeN = c(1000, 2000),
+  numNonNoisy = 4,
+  numNoisy = 12,
+  numReplicate = 1,
+  outputDatFlag = FALSE, outputLogFlag = FALSE)
+
+data <- gen_rand_clust$datList$test_1
+class <- factor(gen_rand_clust$memList$test_1, labels = LETTERS[1:3])
+```
+
+The training data include only 8 variables and one class is unobserved, while the test data include measurements on all variables and classes.
+```{r}
+data <- scale(data)
+
+R <- ncol(data)
+obs <- sort( sample(1:R, R/2) )
+ext <- setdiff(1:R, obs)
+P <- length(obs)
+
+n <- nrow(data)
+n_train <- 500
+n_test <- 300
+
+sel_test <- sample(1:n, n_test)
+data_test <- data[sel_test, ]
+class_test <- class[sel_test]
+
+rem <- which(class == "C")
+data_tmp <- data[-union(rem, sel_test), obs]
+class_tmp <- factor( class[-union(rem, sel_test)] )
+
+sel_train <- sample(1:nrow(data_tmp), n_train)
+data_train <- data_tmp[sel_train, ]
+class_train <- class_tmp[sel_train]
+```
+
+Use a mixture discriminant analysis model as classifier. As expected, the classifier is not flexible enough. It is used as classifier in the learning phase of D-AMDA.
+```{r, message=FALSE}
+mc <- MclustDA(data_train, class_train, modelType = "EDDA")
+mc$models[[1]]$modelName      # selected covariance model
+
+# predict using only variables available in training set
+mc_class <- predict.MclustDA(mc, data_test[,obs])$class  
+table(class_test, mc_class)
+
+
+# learning phase
+learn <- list(pro = mc$prop)
+tmp <- lapply(mc$models, "[[", "parameters")
+learn$mu <- sapply(tmp, "[[", "mean")
+names <- colnames(data_train)
+rownames(learn$mu) <- colnames(data_train)
+learn$sigma <- array( unlist( lapply(tmp, function(x) x$variance$sigma) ), c(P,P, K),
+                      dimnames = list(names, names) )
+learn$K <- length(learn$pro)
+```
+
+Fit a D-AMDA classifier, but because of the noisy variables is not performing great.
+```{r}
+fit <- damda(learn, data_test, H = 0:2, verbose = FALSE)
+fit$H
+
+table(class_test, fit$classification)
+```
+
+Let's perform variable selection.
+```{r,message=FALSE}
+vsel <- damda_varsel(learn, data_test, H = 0:2)
+
+vsel$variables             # inspect selected variables
+gen_rand_clust$noisyList   # these are the "bad" variables
+
+table(class_test, vsel$model$classification)   # nice!
+```
+
+
+----
+
+```{r}
+sessionInfo()
+```
+

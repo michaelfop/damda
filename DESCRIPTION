@@ -1,0 +1,19 @@
+Package: damda
+Type: Package
+Title: Dimension-Adaptive Mixture Discriminant Analysis
+Version: 1.0
+Date: 2021-10-18
+Maintainer: Michael Fop <michael.fop@ucd.ie>
+Authors@R:person("Michael", "Fop", role = c("aut", "cre"),
+                    email = "michael.fop@ucdconnect.ie",
+                    comment = c(ORCID = "0000-0003-3936-2757"))
+Description: Dimension-Adaptive Mixture Discriminant Analysis with variable selection for classification problems where the test data includes unobserved classes and is recorded on additional variables compared to the training data.
+Depends: R (>= 3.4)
+Suggests: parallel, doParallel, knitr, rmarkdown, MBCbook, clusterGeneration
+Imports: Rcpp (>= 1.0), mclust (>= 5.1), BMA, foreach
+LinkingTo: Rcpp, RcppArmadillo
+License: GPL (>= 2)
+ByteCompile: true
+NeedsCompilation: yes
+Encoding: UTF-8
+VignetteBuilder: knitr
